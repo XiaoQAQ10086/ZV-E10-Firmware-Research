@@ -19,7 +19,7 @@ from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
-from . import __version__, doctor, history, selfcheck
+from . import __version__, doctor, history, paths, selfcheck
 from .errors import InstallerError
 from .platform_compat import is_read_only_build, repo_root
 from .steps import diagnostics
@@ -59,7 +59,7 @@ class InstallerApp(ctk.CTk):
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
         self.upstream: Upstream | None = None
-        self.runs_dir = Path("runs").resolve()
+        self.runs_dir = paths.default_runs_dir()
         self.install = None
         self.install_facts: dict = {}
         self.wbi = None
@@ -67,13 +67,12 @@ class InstallerApp(ctk.CTk):
         self.wbi_prepared: dict | None = None
         self.wbi_attempted = False
         self.verify_result: dict | None = None
-        self.backup_copy: Path | None = None
 
         self.step = 1
         self._busy = False
         self.pre_checks: dict = {}
         self.region_confirmed = False
-        self.battery_percent: int | None = None
+        self.battery_confirmed = False
         self.recovery_confirmed = False
         self.log_lines: list[str] = []
         self.tech_window = None
@@ -184,12 +183,23 @@ class InstallerApp(ctk.CTk):
     # -- startup -----------------------------------------------------------
     def _init_upstream(self) -> None:
         try:
+            paths.ensure_data_dir()
+        except OSError as exc:
+            messagebox.showerror(
+                "备份目录不可写",
+                "请将程序解压到可写目录（例如桌面或文档），不要直接在 zip 内运行。\n\n"
+                + str(exc),
+            )
+            self.status.configure(text="备份目录不可写", text_color=DANGER)
+            return
+        try:
             self.upstream = locate(None)
         except InstallerError as exc:
             self.status.configure(text=f"上游未找到：{exc}", text_color=DANGER)
             self._log(f"错误: {exc}")
             return
         self._log(f"上游: {self.upstream.root}")
+        self._log(f"备份目录: {paths.data_dir()}")
         if self.step == 1:
             self._refresh_preconditions()
 
@@ -266,20 +276,7 @@ class InstallerApp(ctk.CTk):
         )
         self.driver_recovery_button.grid(row=3, column=3, padx=(0, 8))
         row(4, "连接", "检测中…", "camera")
-        row(5, "第二份备份", "尚未选择（必须为空目录）", "backup")
-        self.backup_copy_button = ctk.CTkButton(
-            table,
-            text="选择目录",
-            width=96,
-            height=28,
-            corner_radius=8,
-            fg_color=SECONDARY,
-            hover_color=SECONDARY_HOVER,
-            text_color=TEXT,
-            font=self._font(11, True),
-            command=self._choose_backup_copy,
-        )
-        self.backup_copy_button.grid(row=5, column=2, padx=8)
+        row(5, "备份位置", f"{paths.data_dir()}（自动）", "backup")
 
         confirms = ctk.CTkFrame(card, fg_color="transparent")
         confirms.pack(fill="x", padx=24, pady=(14, 4))
@@ -294,34 +291,23 @@ class InstallerApp(ctk.CTk):
             command=self._on_confirm_change,
         ).pack(anchor="w", pady=3)
 
-        battery_row = ctk.CTkFrame(confirms, fg_color="transparent")
-        battery_row.pack(anchor="w", pady=3)
-        ctk.CTkLabel(
-            battery_row, text="相机电量", font=self._font(12), text_color=TEXT
-        ).pack(side="left")
-        self.battery_var = tk.StringVar(
-            value="" if self.battery_percent is None else str(self.battery_percent)
-        )
-        self.battery_entry = ctk.CTkEntry(
-            battery_row,
-            width=64,
-            textvariable=self.battery_var,
+        self.battery_var = tk.BooleanVar(value=self.battery_confirmed)
+        ctk.CTkCheckBox(
+            confirms,
+            text="我已确认相机电量 ≥75%，写入期间不会断电",
+            variable=self.battery_var,
             font=self._font(12),
-        )
-        self.battery_entry.pack(side="left", padx=(8, 4))
-        ctk.CTkLabel(
-            battery_row,
-            text="%（至少 50，刷入期间不会断电）",
-            font=self._font(12),
-            text_color=TEXT,
-        ).pack(side="left")
-        self.battery_var.trace_add("write", lambda *_: self._on_battery_change())
+            checkbox_width=20,
+            checkbox_height=20,
+            command=self._on_battery_change,
+        ).pack(anchor="w", pady=3)
 
         ctk.CTkLabel(
             card,
             text=(
                 "检查会先做约 2 分钟只读稳定性测试，再整盘备份（约 15 分钟）"
-                "并复制第二份备份；期间不要断开相机、不要关机。"
+                "并自动复制第二份到程序目录的 backup/。两份备份位于同一磁盘，"
+                "重要操作后建议再复制到其他磁盘。期间不要断开相机、不要关机。"
                 "每次新的检查或刷入前请先冷启动相机。"
             ),
             font=self._font(11),
@@ -382,12 +368,7 @@ class InstallerApp(ctk.CTk):
         self._update_start_check()
 
     def _on_battery_change(self) -> None:
-        text = self.battery_var.get().strip()
-        try:
-            value = int(text)
-        except ValueError:
-            value = None
-        self.battery_percent = value if value is not None and 50 <= value <= 100 else None
+        self.battery_confirmed = bool(self.battery_var.get())
         self._update_start_check()
 
     def _refresh_preconditions(self) -> None:
@@ -449,12 +430,11 @@ class InstallerApp(ctk.CTk):
             for name in ("camera_usb", "mass_storage", "winusb_open")
         )
         region_ok = bool(self.region_var.get()) if hasattr(self, "region_var") else self.region_confirmed
-        battery_ok = self.battery_percent is not None and 50 <= self.battery_percent <= 100
+        battery_ok = bool(self.battery_var.get()) if hasattr(self, "battery_var") else self.battery_confirmed
         ready = (
             ready
             and region_ok
             and battery_ok
-            and self.backup_copy is not None
             and not self._busy
             and not is_read_only_build()
         )
@@ -503,40 +483,12 @@ class InstallerApp(ctk.CTk):
             except OSError as second:
                 messagebox.showerror("无法打开设备管理器", f"{exc}\n{second}")
 
-    def _choose_backup_copy(self) -> None:
-        path = filedialog.askdirectory(
-            title="选择第二份备份目录（空目录，建议另一块磁盘）"
-        )
-        if not path:
-            return
-        target = Path(path).expanduser().resolve()
-        if target.exists() and any(target.iterdir()):
-            messagebox.showerror("目录非空", "第二份备份目录必须是空目录。")
-            return
-        if (
-            target == self.runs_dir
-            or self.runs_dir in target.parents
-            or target in self.runs_dir.parents
-        ):
-            messagebox.showerror("目录冲突", "第二份备份不能放在 runs/ 目录内。")
-            return
-        self.backup_copy = target
-        if "backup" in getattr(self, "pc_status", {}):
-            self.pc_status["backup"].configure(text=str(target), text_color=OK)
-        self._log(f"第二份备份目录: {target}")
-        self._update_start_check()
-
-    # -- step 2: checks ----------------------------------------------------
     def _start_check(self) -> None:
         if self.upstream is None or self._busy:
             return
         self.region_confirmed = bool(self.region_var.get())
-        self._on_battery_change()
-        if not (
-            self.region_confirmed
-            and self.battery_percent is not None
-            and self.backup_copy is not None
-        ):
+        self.battery_confirmed = bool(self.battery_var.get())
+        if not (self.region_confirmed and self.battery_confirmed):
             return
         self._show_step(2, progress=True)
 
@@ -544,8 +496,7 @@ class InstallerApp(ctk.CTk):
             session = install_session_module.InstallSession(
                 self.upstream,
                 self.runs_dir,
-                backup_copy=self.backup_copy,
-                battery_percent=self.battery_percent,
+                battery_confirmed=self.battery_confirmed,
             )
             try:
                 facts = session.prepare("CN-B2C22")
@@ -637,10 +588,10 @@ class InstallerApp(ctk.CTk):
             "✅ 系统文件与区域属性未修改",
             "✅ /usr 分区为只读",
             f"✅ 连接稳定性：{stability.get('passes')} 次读取一致",
-            f"✅ 电量：{facts.get('battery_percent')}%",
+            "✅ 电量：已确认 ≥75%",
             f"✅ 机身 ID：{facts.get('body_id')}",
             f"✅ 整盘备份完成：{facts.get('backup_dir')}",
-            f"✅ 第二份备份：{facts.get('backup_copy')}",
+            f"✅ 第二份备份：{facts.get('backup_copy')}（程序目录）",
             f"✅ 地区确认：{facts.get('region')}",
             f"（属性 {props.get('0x1071c54')}/{props.get('0xa5000b')}/{props.get('0xa5000c')}）",
         ]

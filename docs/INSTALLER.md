@@ -8,9 +8,9 @@
 > 仅在中国大陆 B=2 / C=22 有功能证据。改机可能影响保修，5GHz 使用受当地法规约束。
 > 本项目与索尼无关，未获官方支持。
 
-## 当前版本（v0.12）
+## 当前版本（v0.13）
 
-v0.12 的 GUI 是五步向导：准备 → 检查 → 刷入 → 冷启动 → 验收；验收未生效时自动进入 WBI 步骤。前提条件、驱动助手、技术工具的位置见下面的“独立 exe”一节。CLI 保留 `doctor` / `inspect` / `install` / `verify` / `wbi`，并新增实验性的 `sound-inspect` / `sound-write` / `sound-write-all` / `sound-restore-all`。
+v0.13 的发行方式是便携 zip：解压后备份自动写入程序目录的 `backup\`，不需要选择目录；电量改为 ≥75% 的确认勾选。GUI 仍是五步向导：准备 → 检查 → 刷入 → 冷启动 → 验收；验收未生效时自动进入 WBI 步骤。CLI 保留 `doctor` / `inspect` / `install` / `verify` / `wbi`，并新增实验性的 `sound-inspect` / `sound-write` / `sound-write-all` / `sound-restore-all`。
 
 ## 前置条件
 
@@ -29,7 +29,7 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e .
 .\.venv\Scripts\zve10-installer.exe doctor --upstream "D:\path\to\unlock"
 .\.venv\Scripts\zve10-installer.exe inspect --upstream "D:\path\to\unlock"
-.\.venv\Scripts\zve10-installer.exe install --upstream "D:\path\to\unlock"
+.\.venv\Scripts\zve10-installer.exe install --upstream "D:\path\to\unlock" --battery-ok
 # cold boot the camera, then:
 .\.venv\Scripts\zve10-installer.exe verify --upstream "D:\path\to\unlock"
 ```
@@ -39,11 +39,26 @@ py -3.12 -m venv .venv
 
 `verify` 的退出码：`0` = `TypeNB/5`；`4` = 补丁与属性正确但 `Page1` 仍是 `TypeRK/4`（需要 WBI，v0.2 不执行）；`3` = 错误。
 
-`inspect` 结果写入 `runs/<timestamp>-inspect-<id>/summary.json`，上游会话快照保留在同一目录的 `session/` 下。
+`inspect` 结果写入 `backup\runs\<timestamp>-inspect-<id>/summary.json`，上游会话快照保留在同一目录的 `session/` 下。
 
-## 独立 exe（v0.12）
+## 便携 zip（v0.13）
 
-构建后得到两个单文件程序：
+推荐使用 `dist\ZV-E10-Portable.zip`。解压到可写目录后运行其中的 exe；备份和运行证据自动写入解压目录的 `backup\`，不需要选择备份目录。不要直接从 zip 压缩包内运行 exe。
+
+zip 内包含：
+
+| 文件 | 说明 |
+|---|---|
+| `ZV-E10-Installer.exe` | GUI，浅色五步向导 |
+| `zve10-installer.exe` | 控制台 CLI |
+| `backup\` | 整盘备份、第二份副本和运行证据 |
+| `README.md` / `LICENSE` / `NOTICE.md` | 说明与许可 |
+
+两份备份都位于程序目录，可防止单个文件损坏，但不能防止整块磁盘或整个目录丢失；完成操作后应自行复制到其他磁盘。
+
+## 独立 exe
+
+构建后也可单独取得两个单文件程序：
 
 | 文件 | 类型 |
 |---|---|
@@ -67,12 +82,11 @@ py -3.12 -m venv .venv
 | 数据线 | 支持数据传输的 USB-C 线 |
 | 驱动 | WinUSB 已绑定；未绑定时点“安装驱动” |
 | 区域 | 中国大陆 B=2 / C=22（勾选确认） |
-| 电量 | 输入相机显示的电量，至少 50% |
-| 第二份备份 | 必须选择一个**空目录**，优先放在另一块磁盘 |
-| 备份 | 程序自动做整盘备份，并复制到第二份目录逐字节校验 |
+| 电量 | 勾选确认相机电量 ≥75%，写入期间不会断电 |
+| 备份 | 自动保存到解压目录的 `backup\`，两份副本同目录；重要操作后建议再复制到其他磁盘 |
 
 **② 检查**：先做约 2 分钟的**只读连接稳定性测试**（重复读取，哈希和属性必须一致），
-然后做整盘备份（约 15 分钟），并把所有备份文件复制到第二份目录逐字节比对。
+然后做整盘备份（约 15 分钟），并把所有备份文件复制到 `backup\` 内的第二份目录逐字节比对。
 任何一项不满足，界面会说明原因，不允许继续。
 
 **③ 刷入**：写入单字节补丁 + 三个属性；需要逐字输入 `PATCH ZV-E10 2.03`。
@@ -101,7 +115,7 @@ py -3.12 -m venv .venv
 
 验收发现菜单未生效时，同一页面会显示 WBI 步骤：
 
-- 选择从官方 2.03 更新包提取的 `ud_wbi_drop.elf`（6,200 字节，哈希必须匹配）；
+- 选择你从官方 2.03 更新包提取的 `ud_wbi_drop.elf`（6,200 字节，哈希必须匹配）；
 - 勾选确认已具备 Pico/BootROM + fastboot 恢复路线（工具无法验证硬件）；
 - 检查会做两次完整 60 MiB 读取和逐字节比对；
 - 只有逐字输入返回的 `INVALIDATE WBI <hash>` 确认字符串才会执行 drop；
@@ -140,20 +154,22 @@ Windows 垫片和内置 Zadig 的哈希。
 
 音频要求：
 
-- PCM WAV（未压缩整数），推荐 16-bit、48 kHz、单声道；
-- 最长 1.0 秒；推荐 0.1–0.5 秒；
+- PCM WAV（未压缩整数），建议 16-bit、48 kHz、单声道；
+- 最长 1.0 秒；建议 0.1–0.5 秒；
 - 峰值约 -6 dBFS，不要削波；
 - 输出 32 字节块，最大 24,832 字节。
 
 ### 相机写入（v0.11，实验）
 
-先只读读取相机上的原厂快门音效并保存到 `runs/<...>/original/`：
+先只读读取相机上的原厂快门音效并保存到 `backup\runs\<...>\original\`：
 
 ```powershell
 .\dist\zve10-installer.exe sound-inspect --upstream "D:\path\to\unlock"
 ```
 
-对照测试：只替换 `Dslr_Emnt_Shutter_Sha.bin`。用 `sound-decode` 解码相机原厂文件得到 WAV，再用 `sound-convert` 编码回 BIN；该 BIN 的音频内容与原厂相同，哈希不同。先 `sound-inspect` 取得相机当前文件的完整 sha256，再写入：
+第一次真机对照测试：只替换 `Dslr_Emnt_Shutter_Sha.bin`。用 `sound-decode`
+解码相机原厂文件得到 WAV，再用 `sound-convert` 编码回 `control.bin`；音频内容相同，
+哈希不同。先 `sound-inspect` 取得相机当前文件的完整 sha256，再写入：
 
 ```powershell
 .\dist\zve10-installer.exe sound-write --upstream "D:\path\to\unlock" `
@@ -174,7 +190,7 @@ Windows 垫片和内置 Zadig 的哈希。
 8. **无论成功失败都在 `finally` 中清理临时文件、remount ro 并复核**；失败会明确报错，不自动重试；
 9. 完成后必须**冷启动**相机再试听；不需要 WBI。
 
-对照测试完成后，或需要覆盖所有可能的 beep type（公开研究中的路线 2），
+如果对照测试成功，或者想直接覆盖所有可能的 beep type（公开研究建议的“路 2”），
 用同一个 BIN 一次写入全部 9 个 `Shutter*` / `10FPS_Kasha*` / `Shutter_Ka` 文件：
 
 ```powershell
@@ -192,11 +208,11 @@ Windows 垫片和内置 Zadig 的哈希。
 
 ### 一键回退原厂声音（v0.12）
 
-`sound-inspect` 已经把 9 个原厂文件保存到 `runs/<时间>-sound-<id>\original\`。需要回退时：
+`sound-inspect` 已经把 9 个原厂文件保存到 `backup\runs\<时间>-sound-<id>\original\`。需要回退时：
 
 ```powershell
 .\dist\zve10-installer.exe sound-restore-all `
-  --from "runs\<sound-run>" `
+  --from "backup\runs\<sound-run>" `
   --confirm "RESTORE ALL SHUTTER"
 ```
 
@@ -259,7 +275,7 @@ $env:ZVE10_READ_ONLY_BUILD="1"
 - 不提供 `--force`；写入相关确认必须逐字输入。
 - 写入后超时、短读、哈希不符 → 标记 `UNKNOWN`，禁止开新会话，先只读复核。
 - WBI 是独立高级命令，默认拒绝；需要恢复路线和逐字确认。
-- `runs/`、`private/`、设备备份均被 `.gitignore` 忽略。
+- `backup/`、`private/`、设备备份均被 `.gitignore` 忽略。
 
 ## 许可
 

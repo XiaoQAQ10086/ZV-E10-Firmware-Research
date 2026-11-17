@@ -11,7 +11,7 @@ Research records and a controlled Windows installer framework for the Sony ZV-E1
 | 5 GHz menu | A single-byte patch to `CautionConfig.so`, three Backup properties, and WBI invalidation were completed on one ZV-E10 2.03. After a cold boot, `Page1=TypeNB/5` and the camera menu exposed the 5 GHz band option. RF link behavior was not tested. |
 | Installer | Source, state machine, gates, double backup, preservation checks, runtime byte check, and a five-step GUI are implemented. Read-only `verify` passed on hardware; `install` has not been validated end-to-end on a factory-state camera. |
 | Shutter sound | Writes to all nine `avsystemsound` slots, per-file readback, cold-boot persistence, and one-command restore passed on hardware. The camera did not play the custom audio; the shutter sound on this firmware does not come from these files. |
-| Offline tests | 43 pytest cases pass, covering gates, state transitions, backup, stability, preservation, the sound codec, the sound service actions, and restore preflight. |
+| Offline tests | 45 pytest cases pass, covering gates, state transitions, backup, stability, preservation, the sound codec, the sound service actions, restore preflight, and portable data paths. |
 
 ## Repository layout
 
@@ -35,19 +35,22 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\zve10-installer.exe check-package --upstream "D:\path\to\unlock"
 ```
 
-`--upstream` must point to a local checkout at the pinned commits. The installer does not clone or modify upstream files. To build the single-file programs:
+`--upstream` must point to a local checkout at the pinned commits. The installer does not clone or modify upstream files. The build produces two executables and a portable zip:
 
 ```powershell
 .\scripts\build_exe.ps1 -Upstream "D:\path\to\unlock"
 ```
 
+Extract `dist\ZV-E10-Portable.zip` to a writable folder and run the executable there. Backups and run evidence are written to `backup\` next to the executable; no backup directory selection is required. Do not run the executable directly from inside the zip.
+
 ## Safety model
 
 - WBI is never automatic. It writes the first 512 bytes of `/dev/nflasha5`; the operation recorded here was authorized by the device owner without a Pico/BootROM recovery path, which deviates from the upstream recovery-route requirement. Do not repeat it.
-- A write requires a full backup, a second byte-compared backup, a read-only stability test, and preservation checks.
+- A write requires a full backup, a second byte-compared backup, a read-only stability test, and preservation checks. Both backups are written automatically under `backup\`; they share one disk, so copy them elsewhere after a write.
+- The GUI requires a checkbox confirming the camera battery is at least 75%. The CLI uses `--battery-ok`; no percentage is entered or stored. The software cannot verify the battery level.
 - Timeouts, short reads, or hash mismatches mark the run `UNKNOWN`; no new session is opened to retry before a read-only review.
 - Sony `ud_wbi_drop.elf`, firmware, BootROM dumps, device backups, and keys are not included.
-- `runs/` and upstream session directories may contain device identifiers and full library snapshots. Keep them private.
+- `backup/` and upstream session directories may contain device identifiers and full library snapshots. Keep them private.
 - Firmware modification may affect warranty; 5 GHz operation is subject to local regulations.
 
 ## Extending the framework

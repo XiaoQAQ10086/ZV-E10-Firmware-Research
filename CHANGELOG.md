@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.13.0 — 2026-11-17
+
+- **Portable zip distribution**: `dist\ZV-E10-Portable.zip` contains the GUI,
+  CLI, `backup\`, README and licenses. Extract to a writable folder; backups
+  and run evidence are written to `backup\` next to the executables.
+- **No backup directory selection**: the second copy is written to
+  `backup\second\<run>` automatically and byte-compared. Both copies share one
+  disk; the documentation states that this protects against file corruption,
+  not disk loss, and recommends an additional manual copy.
+- **Battery confirmation replaces the numeric field**: the GUI requires a
+  checkbox confirming the camera battery is at least 75%. The CLI uses
+  `--battery-ok`; no percentage is entered or stored. Software cannot verify
+  the battery level, so this remains an operator attestation.
+- New `src/zve10_installer/paths.py` resolves the portable data directory from
+  the executable location. Running from source uses the repository's
+  `backup/`; `ZVE10_DATA_DIR` overrides it.
+- Build script creates the portable folder and zip after the two executables.
+- CLI `install` no longer requires `--battery-percent` or `--backup-copy`;
+  `--backup-copy` remains an optional override.
+
 ## 0.12.2 — 2026-11-17
 
 - **Fix `SoundSession.write` shadowed by a boolean attribute.** `__init__` used

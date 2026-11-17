@@ -25,6 +25,7 @@ def _format_facts(facts: dict) -> str:
         f"  properties: {props.get('0x1071c54')}/{props.get('0xa5000b')}/{props.get('0xa5000c')}",
         "  /usr: checked by inspect (must be ro)",
         f"  region: {facts.get('region')}",
+        f"  battery: confirmed at least 75%",
         f"  backup: {facts.get('backup_dir')}",
     ]
     return "\n".join(lines)
@@ -38,8 +39,12 @@ def run(
     backup_passes: int = 1,
     backup_copy: Path | None = None,
     stability_seconds: int = 120,
-    battery_percent: int | None = None,
+    battery_confirmed: bool = False,
 ) -> dict:
+    if not battery_confirmed:
+        raise PreflightError(
+            "confirm the camera battery is at least 75%; use --battery-ok after checking it"
+        )
     checks = doctor.run(upstream)
     if doctor.has_failures(checks):
         raise PreflightError("doctor reported required failures:\n" + doctor.format_checks(checks))
@@ -62,7 +67,7 @@ def run(
         backup_passes=backup_passes,
         backup_copy=backup_copy,
         stability_seconds=stability_seconds,
-        battery_percent=battery_percent,
+        battery_confirmed=battery_confirmed,
     )
     try:
         facts = session.prepare(gates.CHINA_REGION)

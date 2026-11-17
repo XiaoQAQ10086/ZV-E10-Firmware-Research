@@ -43,3 +43,28 @@ Write-Host ""
 Write-Host "Built:"
 Write-Host "  $dist\zve10-installer.exe   (console CLI)"
 Write-Host "  $dist\ZV-E10-Installer.exe  (GUI)"
+
+# Portable distribution: extract, run, and keep backups beside the executable.
+$portable = Join-Path $dist "ZV-E10-Portable"
+New-Item -ItemType Directory -Force $portable | Out-Null
+Copy-Item (Join-Path $dist "ZV-E10-Installer.exe") $portable
+Copy-Item (Join-Path $dist "zve10-installer.exe") $portable
+Copy-Item (Join-Path $repo "README.md") $portable
+Copy-Item (Join-Path $repo "LICENSE") $portable
+Copy-Item (Join-Path $repo "NOTICE.md") $portable
+Copy-Item (Join-Path $repo "docs") $portable -Recurse
+$licenses = Join-Path $portable "licenses"
+New-Item -ItemType Directory -Force $licenses | Out-Null
+Copy-Item (Join-Path $repo "vendor\zadig\COPYING.txt") $licenses
+Copy-Item (Join-Path $repo "vendor\zadig\SOURCE.txt") $licenses
+$backup = Join-Path $portable "backup"
+New-Item -ItemType Directory -Force $backup | Out-Null
+@"
+Backups and run evidence are written here by ZV-E10-Installer.
+Do not delete this folder while a check or write is running.
+"@ | Set-Content -Path (Join-Path $backup "README.txt") -Encoding ASCII
+
+$zip = Join-Path $dist "ZV-E10-Portable.zip"
+if (Test-Path $zip) { Remove-Item -Force $zip }
+Compress-Archive -Path $portable -DestinationPath $zip -CompressionLevel Optimal
+Write-Host "  $zip  (portable folder)"

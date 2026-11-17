@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .. import gates
+from .. import gates, paths
 from ..errors import GateError, InstallerError
 from ..evidence import RunDir
 from ..server import SessionServer
@@ -35,7 +35,7 @@ class InstallSession:
         backup_copy: Path | None = None,
         stability_seconds: int = 120,
         stability_minimum_passes: int = 2,
-        battery_percent: int | None = None,
+        battery_confirmed: bool = False,
     ) -> None:
         self.upstream = upstream
         self.firmware = firmware
@@ -43,7 +43,7 @@ class InstallSession:
         self.backup_copy = Path(backup_copy).expanduser().resolve() if backup_copy else None
         self.stability_seconds = stability_seconds
         self.stability_minimum_passes = stability_minimum_passes
-        self.battery_percent = battery_percent
+        self.battery_confirmed = battery_confirmed
         self.run_dir = RunDir.create(Path(runs_dir), "install")
         self.state = RunState.load_or_create(self.run_dir.state_path)
         self.server = SessionServer(
@@ -69,8 +69,11 @@ class InstallSession:
     # -- precondition check + backup --------------------------------------
     def prepare(self, region: str) -> dict:
         gates.require(gates.check_region(region))
-        if self.battery_percent is None or not 50 <= self.battery_percent <= 100:
-            raise GateError("battery", "enter the camera battery percentage (50-100) first")
+        if not self.battery_confirmed:
+            raise GateError(
+                "battery",
+                "confirm the camera battery is at least 75% before preparation",
+            )
         try:
             self.server.start()
             self.state.advance(Stage.CONNECTED, {"session_dir": str(self.run_dir.session_dir)})
@@ -113,14 +116,10 @@ class InstallSession:
                 passes=self.backup_passes,
             )
             self.backup = backup
-            if self.backup_copy is None:
-                raise GateError(
-                    "backup_copy",
-                    "a second backup directory is required; choose an empty folder, preferably on another disk",
-                )
+            copy_dir = self.backup_copy or paths.second_copy_dir(self.run_dir.path.name)
             second_copy = backup_step.copy_to_second(
                 Path(backup["backup_dir"]),
-                self.backup_copy,
+                copy_dir,
             )
             self.state.advance(
                 Stage.BACKUP_DONE,
@@ -160,7 +159,7 @@ class InstallSession:
                 {
                     "snapshot": second.get("snapshot"),
                     "natural_changes": len(self.natural_changes),
-                    "battery_percent": self.battery_percent,
+                    "battery_confirmed": self.battery_confirmed,
                 },
             )
 
@@ -175,7 +174,7 @@ class InstallSession:
                 "backup_copy": second_copy.get("backup_copy"),
                 "backup_passes": self.backup_passes,
                 "stability": stability,
-                "battery_percent": self.battery_percent,
+                "battery_confirmed": self.battery_confirmed,
                 "body_id": self.body_id,
                 "mounts": first.get("mounts"),
                 "run_dir": str(self.run_dir.path),
@@ -224,7 +223,7 @@ class InstallSession:
                 "backup": final.get("backup"),
                 "backup_dir": self.backup.get("backup_dir"),
                 "preservation": preservation_result,
-                "battery_percent": self.battery_percent,
+                "battery_confirmed": self.battery_confirmed,
                 "body_id": self.body_id,
                 "next": (
                     "Cold boot the camera (off, wait for the lamp, unplug, remove the "

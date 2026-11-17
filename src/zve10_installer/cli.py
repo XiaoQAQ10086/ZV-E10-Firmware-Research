@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import __version__, doctor, platform_compat, selfcheck
+from . import __version__, doctor, paths, platform_compat, selfcheck
 from . import upstream as upstream_mod
 from .errors import InstallerError
 from .steps import diagnostics
@@ -32,7 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", action="version", version=__version__)
     parser.add_argument("--upstream", help="path to the pinned ZV-E10-5GHz-WiFi-Unlock checkout")
-    parser.add_argument("--runs-dir", default="runs", help="directory for local evidence (default: runs)")
+    parser.add_argument("--runs-dir", default=None, help="directory for local evidence (default: <app>/backup/runs)")
     sub = parser.add_subparsers(dest="command", required=True)
 
     doctor_cmd = sub.add_parser(
@@ -65,8 +65,8 @@ def build_parser() -> argparse.ArgumentParser:
         )
         install_cmd.add_argument(
             "--backup-copy",
-            required=True,
-            help="empty second backup directory, preferably on another disk",
+            default=None,
+            help="optional override for the second backup directory (default: <app>/backup/second/<run>)",
         )
         install_cmd.add_argument(
             "--stability-seconds",
@@ -75,10 +75,9 @@ def build_parser() -> argparse.ArgumentParser:
             help="read-only USB stability test duration (default 120)",
         )
         install_cmd.add_argument(
-            "--battery-percent",
-            type=int,
-            required=True,
-            help="camera battery percentage from its display (50-100)",
+            "--battery-ok",
+            action="store_true",
+            help="confirm the camera battery is at least 75%% before preparation",
         )
 
         wbi_cmd = sub.add_parser(
@@ -262,11 +261,12 @@ def main(argv: list[str] | None = None) -> int:
                 except (EOFError, KeyboardInterrupt):
                     pass
                 return 2
-            return _menu(upstream, Path("runs"))
+            return _menu(upstream, paths.default_runs_dir())
         build_parser().print_help()
         return 2
 
     args = build_parser().parse_args(argv)
+    args.runs_dir = Path(args.runs_dir) if args.runs_dir else paths.default_runs_dir()
 
     if args.command in {"sound-convert", "sound-decode"}:
         return _sound_command(args)
@@ -301,9 +301,9 @@ def main(argv: list[str] | None = None) -> int:
                 Path(args.runs_dir),
                 firmware=args.firmware,
                 backup_passes=args.backup_passes,
-                backup_copy=Path(args.backup_copy),
+                backup_copy=Path(args.backup_copy) if args.backup_copy else None,
                 stability_seconds=args.stability_seconds,
-                battery_percent=args.battery_percent,
+                battery_confirmed=args.battery_ok,
             )
         except InstallerError as exc:
             print(f"error: {exc}", file=sys.stderr)

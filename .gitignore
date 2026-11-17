@@ -12,3 +12,5 @@ private/
 *.wav
 *.exe
 vendor/zadig/*.exe
+
+backup/
