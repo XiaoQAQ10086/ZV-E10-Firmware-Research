@@ -1,0 +1,19 @@
+Zadig 2.9 — bundled offline driver helper
+
+Source project: https://github.com/pbatard/libwdi
+Release page:   https://github.com/pbatard/libwdi/releases/tag/v1.5.1
+Download URL:   https://github.com/pbatard/libwdi/releases/download/v1.5.1/zadig-2.9.exe
+
+File:      zadig-2.9.exe
+Size:      5,334,088 bytes
+SHA-256:   4ecaa95df3da3621486a043aef8b3050b8bafe7c901402871e816229ef82039b
+Signature: Authenticode status Valid at build time
+
+License:   GNU General Public License v3 — see COPYING.txt in this directory.
+           The executable is launched as a separate program; it is not linked
+           into the installer. The complete corresponding source is available
+           at the source project URL above.
+
+Purpose:   Offline WinUSB driver binding for ZV-E10 (054c:0d95). The installer
+           launches this file only when the camera driver check fails; the user
+           performs the driver install in Zadig.

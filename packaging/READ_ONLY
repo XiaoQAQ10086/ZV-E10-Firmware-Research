@@ -1,0 +1,3 @@
+# Marker file bundled into read-only builds.
+# The CLI hides the install command when this file is present next to the
+# frozen upstream/compat directories.

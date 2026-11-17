@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zve10-guided-installer"
+version = "0.12.2"
+description = "Guided, gate-enforced installer for the ZV-E10 5GHz Wi-Fi menu"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "ZV-E10 Guided Installer contributors" }]
+dependencies = [
+    "pyusb>=1.2.1",
+    "libusb-package; platform_system == 'Windows'",
+]
+
+[project.scripts]
+zve10-installer = "zve10_installer.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
