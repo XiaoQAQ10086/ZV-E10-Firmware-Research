@@ -12,6 +12,7 @@ import os
 import subprocess
 import sys
 import threading
+import traceback
 from datetime import datetime
 from pathlib import Path
 import tkinter as tk
@@ -75,6 +76,15 @@ class InstallerApp(ctk.CTk):
         self.battery_confirmed = False
         self.recovery_confirmed = False
         self.log_lines: list[str] = []
+        self.log_path: Path | None = None
+        try:
+            paths.ensure_data_dir()
+            logs = paths.logs_dir()
+            logs.mkdir(parents=True, exist_ok=True)
+            self.log_path = logs / f"gui-{datetime.now():%Y%m%d-%H%M%S}.log"
+            self.log_path.write_text("", encoding="utf-8")
+        except OSError:
+            pass
         self.tech_window = None
         self.action_buttons: list[ctk.CTkButton] = []
 
@@ -200,6 +210,8 @@ class InstallerApp(ctk.CTk):
             return
         self._log(f"上游: {self.upstream.root}")
         self._log(f"备份目录: {paths.data_dir()}")
+        if self.log_path is not None:
+            self._log(f"日志文件: {self.log_path}")
         if self.step == 1:
             self._refresh_preconditions()
 
@@ -445,6 +457,7 @@ class InstallerApp(ctk.CTk):
         )
 
     def _install_driver(self) -> None:
+        self._log("用户操作：打开驱动助手")
         zadig = repo_root() / "vendor" / "zadig" / "zadig-2.9.exe"
         if not zadig.is_file():
             messagebox.showerror("驱动助手缺失", f"找不到内置驱动助手：\n{zadig}")
@@ -463,6 +476,7 @@ class InstallerApp(ctk.CTk):
             messagebox.showerror("无法启动驱动助手", str(exc))
 
     def _recover_driver(self) -> None:
+        self._log("用户操作：打开驱动恢复")
         proceed = messagebox.askyesno(
             "恢复 Windows 默认驱动",
             "将打开设备管理器。\n\n"
@@ -491,6 +505,7 @@ class InstallerApp(ctk.CTk):
         if not (self.region_confirmed and self.battery_confirmed):
             return
         self._show_step(2, progress=True)
+        self._log("用户操作：开始检查与备份")
 
         def prepare():
             session = install_session_module.InstallSession(
@@ -658,6 +673,7 @@ class InstallerApp(ctk.CTk):
     def _do_install(self) -> None:
         if self.install is None or self._busy:
             return
+        self._log("用户操作：请求开始刷入")
         answer = ctk.CTkInputDialog(
             text="输入 PATCH ZV-E10 2.03 以确认写入。",
             title="写入确认",
@@ -739,6 +755,7 @@ class InstallerApp(ctk.CTk):
     def _verify_after_boot(self) -> None:
         if self.upstream is None or self._busy:
             return
+        self._log("用户操作：冷启动后开始验收")
         self._show_step(4, progress=True)
         self._run_task(
             "验收",
@@ -1107,16 +1124,26 @@ class InstallerApp(ctk.CTk):
     def _task_done(self, name: str, result, error, on_done) -> None:
         self._busy = False
         if error is not None:
-            self._log(f"{name} 失败：{error}")
+            detail = "".join(
+                traceback.format_exception(type(error), error, error.__traceback__)
+            )
+            self._log(f"{name} 失败：{error}\n{detail}")
         else:
             self._log(f"{name} 完成")
         on_done(result, error)
 
     def _log(self, text: str) -> None:
         stamp = datetime.now().strftime("%H:%M:%S")
-        self.log_lines.append(f"[{stamp}] {text}")
+        line = f"[{stamp}] {text}"
+        self.log_lines.append(line)
+        if self.log_path is not None:
+            try:
+                with self.log_path.open("a", encoding="utf-8") as handle:
+                    handle.write(line + "\n")
+            except OSError:
+                pass
         if self.tech_window is not None and self.tech_window.winfo_exists():
-            self.tech_window.append(f"[{stamp}] {text}")
+            self.tech_window.append(line)
 
     def _open_tech(self) -> None:
         if self.tech_window is not None and self.tech_window.winfo_exists():
@@ -1281,7 +1308,14 @@ class TechWindow(ctk.CTkToplevel):
 
         def worker() -> None:
             try:
-                path = diagnostics.create_bundle(self.app.runs_dir, self.app.upstream)
+                path = diagnostics.create_bundle(
+                    self.app.runs_dir,
+                    self.app.upstream,
+                    extra={
+                        "gui_log": str(self.app.log_path) if self.app.log_path else "",
+                        "gui_version": __version__,
+                    },
+                )
                 self.app.after(
                     0,
                     lambda: self.append(

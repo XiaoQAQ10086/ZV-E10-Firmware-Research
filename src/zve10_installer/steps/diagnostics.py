@@ -19,12 +19,12 @@ from ..platform_compat import repo_root
 from ..upstream import Upstream
 
 PRIVACY = """\
-This bundle contains local paths, session logs and device check results.
-It does not contain camera backups, firmware, helper binaries or Sony tools.
-Review it before sharing publicly.
+This bundle contains local paths, GUI logs, session logs and device check
+results. It does not contain camera backups, firmware, helper binaries or Sony
+tools. Review it before sharing publicly.
 """
 
-RUN_FILES = ("state.json", "run.jsonl", "summary.json", "serve.out", "serve.err")
+RUN_FILES = ("state.json", "run.jsonl", "summary.json", "failure.json", "serve.out", "serve.err")
 
 
 def _sha256(path: Path) -> str:
@@ -84,4 +84,15 @@ def create_bundle(
             session_state = run / "session" / "state.json"
             if session_state.is_file() and session_state.stat().st_size <= 256 * 1024:
                 archive.write(session_state, f"runs/{run.name}/session/state.json")
+
+        logs_dir = runs_dir.parent / "logs"
+        if logs_dir.is_dir():
+            log_files = sorted(
+                (path for path in logs_dir.glob("gui-*.log") if path.is_file()),
+                key=lambda path: path.stat().st_mtime,
+                reverse=True,
+            )[:3]
+            for path in log_files:
+                if path.stat().st_size <= 2 * 1024 * 1024:
+                    archive.write(path, f"logs/{path.name}")
     return target

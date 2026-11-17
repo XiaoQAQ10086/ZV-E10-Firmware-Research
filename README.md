@@ -11,7 +11,7 @@ Research records and a controlled Windows installer framework for the Sony ZV-E1
 | 5 GHz menu | A single-byte patch to `CautionConfig.so`, three Backup properties, and WBI invalidation were completed on one ZV-E10 2.03. After a cold boot, `Page1=TypeNB/5` and the camera menu exposed the 5 GHz band option. RF link behavior was not tested. |
 | Installer | Source, state machine, gates, double backup, preservation checks, runtime byte check, and a five-step GUI are implemented. Read-only `verify` passed on hardware; `install` has not been validated end-to-end on a factory-state camera. |
 | Shutter sound | Writes to all nine `avsystemsound` slots, per-file readback, cold-boot persistence, and one-command restore passed on hardware. The camera did not play the custom audio; the shutter sound on this firmware does not come from these files. |
-| Offline tests | 45 pytest cases pass, covering gates, state transitions, backup, stability, preservation, the sound codec, the sound service actions, restore preflight, and portable data paths. |
+| Offline tests | 48 pytest cases pass, covering gates, state transitions, backup, stability, preservation, the sound codec, the sound service actions, restore preflight, and portable data paths. |
 
 ## Repository layout
 

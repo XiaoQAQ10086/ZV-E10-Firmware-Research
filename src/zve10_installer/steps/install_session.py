@@ -7,6 +7,8 @@ second Jiritsu session. No camera write happens during prepare.
 
 from __future__ import annotations
 
+import traceback
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .. import gates, paths
@@ -67,6 +69,25 @@ class InstallSession:
         )
 
     # -- precondition check + backup --------------------------------------
+    def _record_failure(self, exc: Exception) -> None:
+        detail = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+        payload = {
+            "at": datetime.now(timezone.utc).isoformat(),
+            "stage": self.state.stage.value,
+            "error": str(exc),
+            "traceback": detail,
+        }
+        try:
+            self.state.facts["last_error"] = str(exc)
+            self.state.save()
+            self.run_dir.write_json("failure.json", payload)
+            self.run_dir.append_event(
+                "failure",
+                {"stage": payload["stage"], "error": str(exc)},
+            )
+        except Exception:
+            pass
+
     def prepare(self, region: str) -> dict:
         gates.require(gates.check_region(region))
         if not self.battery_confirmed:
@@ -181,7 +202,8 @@ class InstallSession:
                 "session_dir": str(self.run_dir.session_dir),
             }
             return self.facts
-        except Exception:
+        except Exception as exc:
+            self._record_failure(exc)
             self.close()
             raise
 
@@ -233,7 +255,8 @@ class InstallSession:
             self.run_dir.write_json("summary.json", summary)
             self.run_dir.append_event("install", {"status": "awaiting_verify"})
             return summary
-        except Exception:
+        except Exception as exc:
+            self._record_failure(exc)
             self.close()
             raise
 

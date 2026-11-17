@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.13.1 — 2026-11-17
+
+- **Persistent GUI log**: every GUI session writes `backup\logs\gui-<time>.log`;
+  key clicks, task start/end, and full exception tracebacks are included.
+- **Failure summary**: `InstallSession` writes `failure.json` with stage, error
+  text and traceback, and records `last_error` in the run state. This applies to
+  preparation and write failures.
+- **Diagnostic bundle**: includes `failure.json` and the latest GUI logs, in
+  addition to state, run log, summary and serve output. Backups, firmware,
+  helper binaries and Sony tools remain excluded.
+- 48 offline tests pass.
+- The portable zip is rebuilt; it remains a test build until hardware
+  validation is complete.
+
 ## 0.13.0 — 2026-11-17
 
 - **Portable zip distribution**: `dist\ZV-E10-Portable.zip` contains the GUI,

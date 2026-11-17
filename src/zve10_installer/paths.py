@@ -30,6 +30,10 @@ def default_runs_dir() -> Path:
     return data_dir() / "runs"
 
 
+def logs_dir() -> Path:
+    return data_dir() / "logs"
+
+
 def second_copy_dir(run_name: str) -> Path:
     return data_dir() / "second" / run_name
 
